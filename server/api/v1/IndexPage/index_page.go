@@ -1,6 +1,7 @@
 package IndexPage
 
 import (
+	"fmt"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
 	"github.com/flipped-aurora/gin-vue-admin/server/model/IndexPage"
 	IndexPageReq "github.com/flipped-aurora/gin-vue-admin/server/model/IndexPage/request"
@@ -9,6 +10,7 @@ import (
 	"github.com/flipped-aurora/gin-vue-admin/server/service"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/rpc/jsonrpc"
 )
 
 type IndexPageApi struct {
@@ -125,7 +127,7 @@ func (InPageApi *IndexPageApi) FindIndexPage(c *gin.Context) {
 // @Param data query IndexPageReq.IndexPageSearch true "分页获取IndexPage列表"
 // @Success 200 {string} string "{"success":true,"data":{},"msg":"获取成功"}"
 // @Router /InPage/getIndexPageList [get]
-func (InPageApi *IndexPageApi) GetIndexPageList(c *gin.Context) {
+func (InPageApi *IndexPageApi) GetIndexPageListaa(c *gin.Context) {
 	var pageInfo IndexPageReq.IndexPageSearch
 	_ = c.ShouldBindQuery(&pageInfo)
 	if list, total, err := InPageService.GetIndexPageInfoList(pageInfo); err != nil {
@@ -139,4 +141,52 @@ func (InPageApi *IndexPageApi) GetIndexPageList(c *gin.Context) {
 			PageSize: pageInfo.PageSize,
 		}, "获取成功", c)
 	}
+}
+func (InPageApi *IndexPageApi) GetIndexPageList(c *gin.Context) {
+	//连接远程rpc服务, jsonrpc.Dial
+	conn, err := jsonrpc.Dial("tcp", "127.0.0.1:8177")
+	if err != nil {
+		global.GVA_LOG.Error("获取失败!", zap.Error(err))
+		response.FailWithMessage("获取失败", c)
+	}
+
+	//调用远程方法
+	var resp IndexPages
+	params := indexRequest{0}
+	err = conn.Call("IndexGet.Get", params, &resp)
+	if err != nil {
+		global.GVA_LOG.Error("获取失败!", zap.Error(err))
+		response.FailWithMessage("获取失败", c)
+	}
+	//[{{1 2022-06-17 11:07:12.655 +0800 CST 2022-06-17 11:07:12.655 +0800 CST {0001-01-01 00:00:00 +0000 UTC false}} 小米}]
+	fmt.Println("IndexGet.Get: ", resp)
+	response.OkWithDetailed(resp, "获取成功", c)
+}
+
+type indexRequest struct {
+	Data int
+}
+
+// 首页加载数据
+type IndexPages struct {
+	//AllMinerNum MinerInfo
+	AllVerifier  int `json:"all_verifier"`
+	AllCandidate int `json:"all_candidate"`
+	AllEdgeNode  int `json:"all_edgeNode"`
+	//OnlineMinerNum MinerInfo
+	OnlineVerifier  int `json:"online_verifier"`
+	OnlineCandidate int `json:"online_candidate"`
+	OnlineEdgeNode  int `json:"online_edge_node"`
+	//ProfitInfo Profit  // 个人收益信息
+	CumulativeProfit float64 `json:"cumulative_profit"`
+	YesterdayProfit  float64 `json:"yesterday_profit"`
+	SevenDaysProfit  float64 `json:"seven_days_profit"`
+	MonthProfit      float64 `json:"month_profit"`
+	StorageT         float64 `json:"storage_t"`    // 存储（T）
+	BandwidthMb      float64 `json:"bandwidth_mb"` // 带宽（MB）
+	//Device Devices // 设备信息
+	TotalNum    int `json:"total_num"`
+	OnlineNum   int `json:"online_num"`
+	OfflineNum  int `json:"offline_num"`
+	AbnormalNum int `json:"abnormal_num"`
 }
